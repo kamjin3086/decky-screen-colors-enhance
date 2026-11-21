@@ -17,7 +17,22 @@ The aim is simple: **help people find a comfortable-looking OLED image without g
 - **Highlight start (50–90)**: adjusts where the highlight compression begins; default **70**. The algorithm automatically keeps its brightness mapping monotonic.
 - **Works alongside the original controls**: keep your saturation, vibrance, contrast, and temperature preferences rather than installing a separate color-grading plugin.
 - **Backwards-compatible settings**: existing saved profiles continue to work with white reduction disabled until you enable it.
+- **Personal presets (new)**: save the current display settings with your own name, switch between saved looks instantly, and rename or delete them. Editing a loaded preset and pressing Save gives you a choice to **overwrite** or **save as new**. Personal presets appear near the top of the plugin, below the original built-in presets, and are stored separately so the original Cinema/Vivid/Comfort looks remain unchanged.
 - **Tests and CI**: regression tests check old profiles, dark-region preservation, color ratios, and monotonic highlight mapping; GitHub Actions builds a Decky install ZIP.
+
+### Using personal presets
+
+Open **Screen Colors → My presets**, directly below the original preset buttons.
+Select any saved preset to apply its complete color configuration immediately.
+After adjusting the sliders, press **Save**: when a personal preset is selected,
+choose **Overwrite** or **Save as new** (which asks for a new name). Use **Rename**
+or **Delete** to manage a selected preset; deletion does not change the image
+currently on screen. **Revert to saved** discards unsaved slider changes for
+the selected preset. Up to 30 presets can be stored, each with a 1–40-character
+name. Presets persist across restarts in a separate JSON file.
+
+This intentionally does **not** include a one-size-fits-all "LCD Comfort" preset:
+what feels like a comfortable LCD image differs from person to person.
 
 ### Who might find this useful?
 
@@ -37,6 +52,8 @@ Open this repository's [Actions](https://github.com/kamjin3086/decky-screen-colo
 ### 中文说明
 
 这个 Fork 来自一次真实的 Steam Deck LCD → OLED 体验：OLED 的色彩、对比度和局部高亮让画面更漂亮，却也可能让部分人感觉刺眼、下意识眯眼；原来的 LCD 反而显得柔和。实际体验中，**小幅降低饱和度、鲜艳度和对比度，就带来了明显的主观舒适度改善**，因此进一步增加了独立的「降低白点值／亮色强度」功能，用于压低仍然突出的亮部，同时尽量保留暗部。
+
+**新增「我的预设」：** 位于原版预设下方、手动调节上方。可以给当前调色参数命名保存，并快速切换不同预设查看效果。对已加载的个人预设修改后，点「保存」可选择覆盖或另存为新预设；另支持重命名、删除及恢复已保存设置。个人预设与原版预设互不影响，也不会默认提供所谓的统一 LCD 舒适预设。
 
 它适合想保留 OLED 优势、却更喜欢 LCD 柔和观感的人，也适合不喜欢偏黄夜间模式、但希望亮色不那么强烈的玩家。**这不是消除 PWM 的功能，也没有医学护眼效果保证**；你的实际感受比任何固定参数都重要。
 

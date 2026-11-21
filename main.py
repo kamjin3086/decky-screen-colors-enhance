@@ -22,6 +22,7 @@ import math
 import os
 import subprocess
 import tempfile
+import uuid
 
 import decky  # provee logger y rutas (DECKY_PLUGIN_SETTINGS_DIR, etc.)
 
@@ -364,6 +365,83 @@ def _load_state():
     return state
 
 
+# Personal presets use their own file; color.json keeps its existing format.
+# Built-in looks above are never changed by personal preset operations.
+MAX_USER_PRESETS = 30
+MAX_USER_PRESET_NAME = 40
+
+
+def _user_presets_path():
+    return os.path.join(os.path.dirname(_settings_path()), "user_presets.json")
+
+
+def _normalize_preset_name(name):
+    if not isinstance(name, str):
+        raise ValueError("Enter a preset name.")
+    clean = " ".join(name.split())
+    if not clean or len(clean) > MAX_USER_PRESET_NAME:
+        raise ValueError("Preset name must be 1–40 characters.")
+    if any(ord(c) < 32 or ord(c) == 127 for c in clean):
+        raise ValueError("Preset name contains unsupported characters.")
+    return clean
+
+
+def _check_name_available(items, name, exclude_id=None):
+    if any(item["name"].casefold() == name.casefold()
+           and item["id"] != exclude_id for item in items):
+        raise ValueError("A preset with this name already exists.")
+
+
+def _load_user_presets():
+    try:
+        with open(_user_presets_path(), encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return [], None
+
+    if not isinstance(raw, dict) or not isinstance(raw.get("items"), list):
+        return [], None
+
+    result, used_ids, used_names = [], set(), set()
+    for item in raw["items"][:MAX_USER_PRESETS]:
+        if not isinstance(item, dict) or not isinstance(item.get("color"), dict):
+            continue
+        uid = item.get("id")
+        if not isinstance(uid, str) or len(uid) != 32:
+            continue
+        try:
+            name = _normalize_preset_name(item.get("name"))
+        except ValueError:
+            continue
+        if uid in used_ids or name.casefold() in used_names:
+            continue
+        color = dict(NATIVE)
+        color.update(sanitize(item["color"]))
+        result.append({"id": uid, "name": name, "color": color})
+        used_ids.add(uid)
+        used_names.add(name.casefold())
+
+    selected = raw.get("selected_id")
+    if selected not in used_ids:
+        selected = None
+    return result, selected
+
+
+def _save_user_presets(items, selected):
+    """Atomically update the personal preset file to avoid partial JSON writes."""
+    path = _user_presets_path()
+    directory = os.path.dirname(path)
+    fd, temp_path = tempfile.mkstemp(prefix=".user_presets_", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"version": 1, "items": items, "selected_id": selected},
+                      f, ensure_ascii=False, indent=2)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
 def _save_state(state):
     try:
         with open(_settings_path(), "w") as f:
@@ -375,6 +453,13 @@ def _save_state(state):
 # ---------------------------------------------------------------------------
 # Plugin de Decky
 # ---------------------------------------------------------------------------
+def _find_user_preset(items, uid):
+    for item in items:
+        if item["id"] == uid:
+            return item
+    raise ValueError("Preset not found. It may have been deleted.")
+
+
 def _active_key(state):
     """Qué botón está 'puesto' ahora: nativo, look OLED, un preset o personalizado."""
     if is_native(state):
@@ -401,6 +486,17 @@ class Plugin:
             "native": NATIVE,
             "presets": list(PRESETS.keys()),
             "active": _active_key(self._state),
+            "user_presets": [
+                {"id": item["id"], "name": item["name"]}
+                for item in self._user_presets
+            ],
+            "selected_user_preset": self._selected_user_preset,
+            "user_preset_dirty": (
+                self._selected_user_preset is not None
+                and any(item["id"] == self._selected_user_preset
+                        and item["color"] != self._state
+                        for item in self._user_presets)
+            ),
         }
 
     async def get_state(self) -> dict:
@@ -419,6 +515,85 @@ class Plugin:
             self._state[f] = v
         return await self._apply_and_save()
 
+    async def _persist_user_presets(self):
+        await asyncio.to_thread(
+            _save_user_presets, self._user_presets, self._selected_user_preset
+        )
+
+    async def save_user_preset(self, name: str) -> dict:
+        """Save current in-memory color under a new, unique personal name."""
+        clean = _normalize_preset_name(name)
+        _check_name_available(self._user_presets, clean)
+        if len(self._user_presets) >= MAX_USER_PRESETS:
+            raise ValueError("Too many personal presets (maximum 30).")
+        uid = uuid.uuid4().hex
+        previous = self._selected_user_preset
+        self._user_presets.append({
+            "id": uid, "name": clean, "color": dict(self._state)
+        })
+        self._selected_user_preset = uid
+        try:
+            await self._persist_user_presets()
+        except Exception:
+            self._user_presets.pop()
+            self._selected_user_preset = previous
+            raise
+        return self._state_dict()
+
+    async def overwrite_user_preset(self, uid: str) -> dict:
+        """Only overwrite the currently selected personal preset."""
+        if uid != self._selected_user_preset:
+            raise ValueError("Select a personal preset before overwriting it.")
+        item = _find_user_preset(self._user_presets, uid)
+        previous = item["color"]
+        item["color"] = dict(self._state)
+        try:
+            await self._persist_user_presets()
+        except Exception:
+            item["color"] = previous
+            raise
+        return self._state_dict()
+
+    async def load_user_preset(self, uid: str) -> dict:
+        item = _find_user_preset(self._user_presets, uid)
+        old_state, old_selected = self._state, self._selected_user_preset
+        self._state = dict(item["color"])
+        self._selected_user_preset = uid
+        try:
+            await self._apply_and_save()
+            await self._persist_user_presets()
+        except Exception:
+            self._state, self._selected_user_preset = old_state, old_selected
+            raise
+        return self._state_dict()
+
+    async def rename_user_preset(self, uid: str, name: str) -> dict:
+        item = _find_user_preset(self._user_presets, uid)
+        clean = _normalize_preset_name(name)
+        _check_name_available(self._user_presets, clean, exclude_id=uid)
+        old_name = item["name"]
+        item["name"] = clean
+        try:
+            await self._persist_user_presets()
+        except Exception:
+            item["name"] = old_name
+            raise
+        return self._state_dict()
+
+    async def delete_user_preset(self, uid: str) -> dict:
+        _find_user_preset(self._user_presets, uid)
+        old_items, old_selected = self._user_presets, self._selected_user_preset
+        self._user_presets = [p for p in self._user_presets if p["id"] != uid]
+        if self._selected_user_preset == uid:
+            self._selected_user_preset = None
+        try:
+            await self._persist_user_presets()
+        except Exception:
+            self._user_presets, self._selected_user_preset = old_items, old_selected
+            raise
+        # Deliberately leave current image untouched.
+        return self._state_dict()
+
     async def apply_preset(self, key: str) -> dict:
         """Aplica un look completo (cine/vivo/comodo) o 'native' (reset)."""
         if key == "native":
@@ -426,17 +601,26 @@ class Plugin:
         elif key in PRESETS:
             self._state = dict(NATIVE)
             self._state.update(sanitize(PRESETS[key]))
-        return await self._apply_and_save()
+        self._selected_user_preset = None
+        result = await self._apply_and_save()
+        await self._persist_user_presets()
+        return result
 
     async def apply_oled_look(self) -> dict:
         """Un toque: acerca el color al de un OLED (más vibrante + contraste)."""
         self._state = dict(NATIVE)
         self._state.update(sanitize(OLED_LOOK))
-        return await self._apply_and_save()
+        self._selected_user_preset = None
+        result = await self._apply_and_save()
+        await self._persist_user_presets()
+        return result
 
     async def reset(self) -> dict:
         self._state = dict(NATIVE)
-        return await self._apply_and_save()
+        self._selected_user_preset = None
+        result = await self._apply_and_save()
+        await self._persist_user_presets()
+        return result
 
     async def _watchdog(self):
         """El LUT muere con la instancia de gamescope (reinicio de la consola o de
@@ -455,6 +639,7 @@ class Plugin:
 
     async def _main(self):
         self._state = _load_state()
+        self._user_presets, self._selected_user_preset = _load_user_presets()
         # force_composite se deja en False: Steam Deck es AMD y lleva el LUT por el
         # pipeline de color del hardware. En Intel/Xe habría que ponerlo en True.
         self._backend = GamescopeColorBackend(force_composite=False)
