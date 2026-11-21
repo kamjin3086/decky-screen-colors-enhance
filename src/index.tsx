@@ -46,6 +46,12 @@ const MAIN: [string, string, number][] = [
   ["gamma", "field.gamma", 5],
   ["black", "field.black", 5],
 ];
+// White reduction is separate from temperature/white balance.
+// Keep it in its own section so users can A/B test highlights independently.
+const HIGHLIGHTS: [string, string, number][] = [
+  ["white_reduction", "field.whiteReduction", 1],
+  ["white_threshold", "field.whiteThreshold", 5],
+];
 const ADVANCED: [string, string, number][] = [
   ["hue", "field.hue", 5],
   ["gain_r", "field.gain_r", 2],
@@ -183,6 +189,15 @@ const ColorPanel: FC = () => {
       </PanelSection>
 
       <PanelSection title={t("section.manual")}>{MAIN.map(slider)}</PanelSection>
+
+      <PanelSection title={t("section.highlights")}>
+        <PanelSectionRow>
+          <span style={{ opacity: 0.75, fontSize: "0.8em" }}>
+            {t("section.highlights.desc")}
+          </span>
+        </PanelSectionRow>
+        {HIGHLIGHTS.map(slider)}
+      </PanelSection>
 
       <PanelSection title={t("section.advanced")}>
         <PanelSectionRow>

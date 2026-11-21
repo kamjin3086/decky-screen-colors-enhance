@@ -39,6 +39,8 @@ NATIVE = {
     "gain_g": 100,
     "gain_b": 100,
     "vibrance": 0,       # como saturación pero respeta los píxeles ya vívidos
+    "white_reduction": 0,  # 0 = off; reduce nominal white-channel output at 100%
+    "white_threshold": 70, # preferred start of highlight compression (0..100)
 }
 
 RANGES = {
@@ -52,6 +54,8 @@ RANGES = {
     "gain_g": (50, 150),
     "gain_b": (50, 150),
     "vibrance": (-100, 100),
+    "white_reduction": (0, 50),
+    "white_threshold": (50, 90),
 }
 
 # Presets "look completo" para paneles LCD (empuje firme). Cada uno ajusta
@@ -104,6 +108,31 @@ def _hue_matrix(deg):
     )
 
 
+def _reduce_white_point(r, g, b, reduction, threshold):
+    """Compress high pixel levels, not color temperature.
+
+    Operates on the LUT's normalized RGB values after existing adjustments.
+    A single gain is applied to all three channels: hue/channel ratios and
+    shadows are preserved. The piecewise-linear highlight curve is monotone,
+    so very bright pixels never become darker than dimmer pixels.
+
+    Reduction denotes nominal RGB code-value reduction at pure white (not a
+    measured percentage of panel luminance or Apple's proprietary algorithm).
+    When requested white output is below the threshold, the effective knee
+    moves down to avoid an inverted/non-monotonic highlight curve.
+    """
+    if reduction <= 0.0:
+        return r, g, b
+    peak = max(r, g, b)
+    white_cap = 1.0 - reduction
+    knee = min(threshold, white_cap)
+    if peak <= knee or peak <= 0.0:
+        return r, g, b
+    compressed_peak = knee + (peak - knee) * (white_cap - knee) / (1.0 - knee)
+    factor = compressed_peak / peak
+    return r * factor, g * factor, b * factor
+
+
 def _coeffs(state):
     gm, h, bl = state.get("gamma", 0), state.get("hue", 0), state.get("black", 0)
     return (
@@ -117,11 +146,13 @@ def _coeffs(state):
         _hue_matrix(h * _HUE_MAX_DEG / 100.0) if h else None,
         1.0 + state.get("contrast", 0) / 100.0,
         (bl / 100.0 * _BLACK_MAX) if bl else None,
+        state.get("white_reduction", 0) / 100.0,
+        state.get("white_threshold", 70) / 100.0,
     )
 
 
 def _apply(r, g, b, c):
-    gr, gg, gb, t, gexp, s, v, hmat, k, kb = c
+    gr, gg, gb, t, gexp, s, v, hmat, k, kb, wr, wt = c
     r, g, b = r * gr, g * gg, b * gb
     r *= 1.0 + _TEMP_GAIN * t
     b *= 1.0 - _TEMP_GAIN * t
@@ -139,7 +170,10 @@ def _apply(r, g, b, c):
     r, g, b = (r - 0.5) * k + 0.5, (g - 0.5) * k + 0.5, (b - 0.5) * k + 0.5
     if kb is not None:
         r, g, b = _black_pt(r, kb), _black_pt(g, kb), _black_pt(b, kb)
-    return _clamp01(r), _clamp01(g), _clamp01(b)
+    r, g, b = _clamp01(r), _clamp01(g), _clamp01(b)
+    if wr:
+        r, g, b = _reduce_white_point(r, g, b, wr, wt)
+    return r, g, b
 
 
 def build_cube(state, size=_LUT_SIZE):

@@ -29,6 +29,9 @@
 - **Presets** — Cinema, Vivid and Comfort: complete, ready-made looks.
 - **Manual adjustment** — saturation, vibrance, temperature, contrast, gamma and
   black level, applied live.
+- **Reduce white point (SDR)** — optionally compress bright whites and strong
+  colored highlights without dimming shadows, using two separate controls.
+  Set **Bright color reduction** to 0 to disable it completely.
 - **Advanced** — hue and per-channel RGB gains, hidden behind a toggle so the
   panel stays simple.
 - **It sticks** — your look is saved and re-applied automatically after a reboot,
@@ -56,11 +59,36 @@ Open the **Quick Access Menu** (**⋯** button) and pick **Screen Colors**.
 | **OLED look** | Saturation 120 + contrast 20. It approximates the *color* of an OLED; it cannot give true per-pixel blacks. |
 | **Cinema / Vivid / Comfort** | Complete looks: Cinema is warm and contrasty, Vivid pushes color hard, Comfort is warmer and softer for night-time. |
 | **Manual adjustment** | Fine-tune each parameter. Changes apply live and are saved. |
+| **Bright color reduction** | 0–50; at 10, pure white maps to nominal RGB output 0.90 (not necessarily 10% less emitted light). Default **0**. |
+| **Highlight start** | Preferred compression threshold 50–90, default 70. When a high threshold conflicts with strong white reduction, the effective knee moves down automatically to preserve monotonic brightness. |
 | **Hue and RGB gains** | White-balance tweaks, for when a panel pulls green or magenta. |
 | **Reset to native** | Back to the panel's original color. |
 
 The **Current** line at the top always tells you which look is applied
 (*Native*, *OLED look*, a preset, or *Custom*).
+
+## Example: a softer Steam Deck OLED image
+
+Start with the comfortable existing values if you already have them. For example:
+
+- Saturation **90**
+- Vibrance **-5**
+- Temperature **+20** (positive values in the current color engine increase red
+  relative to blue, i.e. physically **warmer**, despite how some screens may feel)
+- Contrast **-10**
+- Bright color reduction **10**, highlight start **70**
+
+Try white reduction at **0 → 5 → 10**, keeping the other controls fixed.
+A setting of 0 retains the previous plugin behavior. This feature is **not**
+Apple's proprietary Reduce White Point algorithm, a hardware white-point
+calibration, an HDR tone mapper, or a PWM/flicker treatment.
+
+The effect works on normalized, gamma-encoded RGB values **after** the
+existing controls. It scales all three channels equally above the highlight
+threshold, preserving color ratios and shadow values. The resulting peak
+mapping is monotone: bright colors cannot become darker than an otherwise
+identical dimmer color. It is intended for **SDR** game output; HDR accuracy
+and display-level behavior have not been validated.
 
 ## How it works
 
