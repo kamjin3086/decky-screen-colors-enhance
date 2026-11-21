@@ -1,3 +1,47 @@
+> [!IMPORTANT]
+> **This is a community fork of [Screen Colors by PacificSilent](https://github.com/PacificSilent/decky-screen-colors).** The original project, credits, and documentation are preserved below. This section describes why the fork exists and what it adds.
+
+## Why this fork exists
+
+**A beautiful OLED screen does not always feel comfortable to look at.**
+
+This fork started with a Steam Deck LCD owner trying a Steam Deck OLED. The OLED looked more vivid and contrasty, but some colors and bright highlights felt unusually intense, with an urge to squint and a sense of tension around the eyes. The LCD, by comparison, felt softer and more relaxed.
+
+Rather than assuming OLED itself was the problem, we tried adjusting the image. **Slightly lowering saturation, vibrance, and contrast made a surprisingly large subjective difference.** Some whites and highlights still felt too strong, which motivated a separate *Reduce White Point* control.
+
+The aim is simple: **help people find a comfortable-looking OLED image without giving up the screen's benefits or forcing a yellow/warm color temperature.** Everyone perceives screens differently; this is an additional option, not a claim that one display setting is universally better.
+
+## What's different in this fork?
+
+- **Reduce White Point / Bright color reduction (0–50)**: compresses very bright white and colored pixel values while aiming to leave shadows unchanged. Default **0 (off)**.
+- **Highlight start (50–90)**: adjusts where the highlight compression begins; default **70**. The algorithm automatically keeps its brightness mapping monotonic.
+- **Works alongside the original controls**: keep your saturation, vibrance, contrast, and temperature preferences rather than installing a separate color-grading plugin.
+- **Backwards-compatible settings**: existing saved profiles continue to work with white reduction disabled until you enable it.
+- **Tests and CI**: regression tests check old profiles, dark-region preservation, color ratios, and monotonic highlight mapping; GitHub Actions builds a Decky install ZIP.
+
+### Who might find this useful?
+
+- **Steam Deck LCD → OLED upgraders** who enjoy the OLED image but miss the LCD's softer look.
+- Players who find **bright HUD elements, white menus, or colorful effects** disproportionately intense, even after lowering saturation.
+- People who prefer **cool/neutral colors rather than yellow night modes**, but still want less aggressive highlights.
+- Anyone who likes experimenting with **personal display comfort**, not just maximizing vibrancy.
+
+**A personal starting point (not a universal preset):** Saturation **90**, Vibrance **-5**, Contrast **-10**, Temperature **+20**, Bright color reduction **5–10**, Highlight start **70**. Change one control at a time and keep whichever settings actually feel comfortable.
+
+> **Important limitations:** This is an **SDR color-mapping adjustment**, not a medical eye-care feature. It is not Apple's proprietary Reduce White Point algorithm. It **does not remove OLED PWM/flicker**, change panel hardware, or guarantee relief from eyestrain or headaches. The reduction percentage controls RGB output values, not measured screen luminance. If symptoms persist, do not force yourself to adapt.
+
+### Installing this fork
+
+Open this repository's [Actions](https://github.com/kamjin3086/decky-screen-colors-enhance/actions/workflows/validate-package.yml) → choose a successful run → download the `decky-screen-colors-white-point` artifact. **Extract the downloaded Actions artifact first**; it contains the actual `decky-screen-colors-white-point.zip` that Decky can install through **Developer → Install Plugin from ZIP**. The upstream installation link in the original README below installs the *original version*, not this fork.
+
+### 中文说明
+
+这个 Fork 来自一次真实的 Steam Deck LCD → OLED 体验：OLED 的色彩、对比度和局部高亮让画面更漂亮，却也可能让部分人感觉刺眼、下意识眯眼；原来的 LCD 反而显得柔和。实际体验中，**小幅降低饱和度、鲜艳度和对比度，就带来了明显的主观舒适度改善**，因此进一步增加了独立的「降低白点值／亮色强度」功能，用于压低仍然突出的亮部，同时尽量保留暗部。
+
+它适合想保留 OLED 优势、却更喜欢 LCD 柔和观感的人，也适合不喜欢偏黄夜间模式、但希望亮色不那么强烈的玩家。**这不是消除 PWM 的功能，也没有医学护眼效果保证**；你的实际感受比任何固定参数都重要。
+
+---
+
 <h1 align="center">Screen Colors</h1>
 
 <p align="center">
