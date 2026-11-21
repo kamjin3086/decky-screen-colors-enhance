@@ -1,0 +1,58 @@
+name: Validate and package Screen Colors
+
+on:
+  push:
+    branches: [main, feat/reduce-white-point]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test LUT behavior
+        run: python -m unittest discover -s tests -v
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Decky frontend
+        run: pnpm run build
+
+      - name: Package installable ZIP
+        shell: bash
+        run: |
+          mkdir -p "package/Screen Colors"
+          cp main.py plugin.json package.json LICENSE CREDITS.md README.md "package/Screen Colors/"
+          cp -r dist "package/Screen Colors/"
+          (cd package && zip -qr "../decky-screen-colors-white-point.zip" "Screen Colors")
+          unzip -l decky-screen-colors-white-point.zip
+
+      - name: Upload Decky ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: decky-screen-colors-white-point
+          path: decky-screen-colors-white-point.zip
+          if-no-files-found: error
